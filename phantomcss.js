@@ -19,7 +19,7 @@ var _hideElements;
 var _addLabelToFailedImage = true;
 var _test_match;
 var _test_exclude;
-var _threshold = 0.09;
+var _threshold1 = Number(0.05);
 
 exports.screenshot = screenshot;
 exports.compareAll = compareAll;
@@ -328,7 +328,9 @@ function initClient(){
 				onComplete(function(data){
 					var diffImage;
 
-					if(Number(data.misMatchPercentage) > _threshold){
+					if(Number(data.misMatchPercentage) > 0.08){
+						console.log(Number(data.misMatchPercentage));
+
 						result = data.misMatchPercentage;
 					} else {
 						result = false;
@@ -336,7 +338,7 @@ function initClient(){
 
 					window._imagediff_.hasResult = true;
 
-					if(Number(data.misMatchPercentage) > _threshold){
+					if(Number(data.misMatchPercentage) > 0.08){
 						render(data);
 					}
 					
