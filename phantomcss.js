@@ -148,7 +148,7 @@ function asyncCompare(one, two, func){
 		}, function(){
 			func(false);
 		},
-		10000
+		15000
 	);
 }
 
@@ -265,7 +265,7 @@ function compareAll(exclude){
 								});
 
 							}, function(){},
-							10000
+							15000
 						);
 					} else {
 						_onPass(test);
@@ -283,7 +283,7 @@ function compareAll(exclude){
 		}, function(){
 			_onComplete(tests, fails, errors);
 		}, function(){},
-		10000);
+		15000);
 	});
 }
 
@@ -328,7 +328,7 @@ function initClient(){
 				onComplete(function(data){
 					var diffImage;
 
-					if(Number(data.misMatchPercentage) > 0.09){
+					if(Number(data.misMatchPercentage) > 0.08){
 						console.log(Number(data.misMatchPercentage));
 
 						result = data.misMatchPercentage;
@@ -338,7 +338,7 @@ function initClient(){
 
 					window._imagediff_.hasResult = true;
 
-					if(Number(data.misMatchPercentage) > 0.09){
+					if(Number(data.misMatchPercentage) > 0.08){
 						render(data);
 					}
 					
