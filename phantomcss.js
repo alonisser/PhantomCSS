@@ -328,7 +328,7 @@ function initClient(){
 				onComplete(function(data){
 					var diffImage;
 
-					if(Number(data.misMatchPercentage) > threshold){
+					if(Number(data.misMatchPercentage) > _threshold){
 						result = data.misMatchPercentage;
 					} else {
 						result = false;
@@ -336,7 +336,7 @@ function initClient(){
 
 					window._imagediff_.hasResult = true;
 
-					if(Number(data.misMatchPercentage) > threshold){
+					if(Number(data.misMatchPercentage) > _threshold){
 						render(data);
 					}
 					
