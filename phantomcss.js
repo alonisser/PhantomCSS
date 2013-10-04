@@ -19,7 +19,7 @@ var _hideElements;
 var _addLabelToFailedImage = true;
 var _test_match;
 var _test_exclude;
-var _threshold1 = Number(0.05);
+var _threshold = 0.05;
 
 exports.screenshot = screenshot;
 exports.compareAll = compareAll;
@@ -35,9 +35,11 @@ function init(options){
 	_root = options.screenshotRoot || _root;
 	_diffRoot = options.failedComparisonsRoot || _diffRoot;
 	_fileNameGetter = options.fileNameGetter || _fileNameGetter;
-
+    _threshold = options.threshold || _threshold;
+    console.log(_threshold);
 	_onPass = options.onPass || _onPass;
 	_onFail = options.onFail || _onFail;
+
 	_onTimeout = options.onTimeout || _onTimeout;
 	_onComplete = options.onComplete || options.report || _onComplete;
 
@@ -291,10 +293,8 @@ function initClient(){
 
 	casper.page.injectJs(_libraryRoot+fs.separator+'resemble.js');
 
-	casper.evaluate(function(){
-		
+	casper.evaluate(function(_threshold){
 		var result;
-
 		var div = document.createElement('div');
 
 		// this is a bit of hack, need to get images into browser for analysis
@@ -327,24 +327,24 @@ function initClient(){
 				ignoreAntialiasing(). // <-- muy importante
 				onComplete(function(data){
 					var diffImage;
-
-					if(Number(data.misMatchPercentage) > 0.08){
+					if(Number(data.misMatchPercentage) > _threshold){
 						console.log(Number(data.misMatchPercentage));
 
 						result = data.misMatchPercentage;
 					} else {
 						result = false;
 					}
+                    console.log(result);
 
 					window._imagediff_.hasResult = true;
 
-					if(Number(data.misMatchPercentage) > 0.08){
+					if(Number(data.misMatchPercentage) > _threshold){
 						render(data);
 					}
 					
 				});
 		}
-	});
+	},_threshold);
 }
 
 function _onPass(test){
