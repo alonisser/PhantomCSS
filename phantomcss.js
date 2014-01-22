@@ -1,15 +1,15 @@
 /*
 Author: James Cryer
 Company: Huddle
-Last updated date: 06 Aug 2013
+Last updated date: 14 Jan 2014
 URL: https://github.com/Huddle/PhantomCSS
 More: http://tldr.huddle.com/blog/css-testing/
 */
 
 var fs = require('fs');
 
-var _root = '.';
-var _diffRoot = false;
+var _root = '.'+fs.separator+'screenshots';
+var _diffRoot = '.'+fs.separator+'failures';
 var _count = 0;
 var _realPath;
 var _diffsToProcess = [];
@@ -19,17 +19,24 @@ var _hideElements;
 var _addLabelToFailedImage = true;
 var _test_match;
 var _test_exclude;
-var _threshold = 0.05;
+var _mismatchTolerance = 0.05;
+var diffsCreated = [];
 
 exports.screenshot = screenshot;
 exports.compareAll = compareAll;
 exports.compareMatched = compareMatched;
+exports.compareExplicit = compareExplicit;
+exports.compareSession = compareSession;
 exports.init = init;
 exports.update = init;
 exports.turnOffAnimations = turnOffAnimations;
 exports.getExitStatus = getExitStatus;
+exports.getCreatedDiffFiles = getCreatedDiffFiles;
 
 function init(options){
+
+	options = options || {};
+
 	casper = options.casper || casper;
 	_libraryRoot = options.libraryRoot || _libraryRoot;
 	_root = options.screenshotRoot || _root;
@@ -44,6 +51,8 @@ function init(options){
 	_onComplete = options.onComplete || options.report || _onComplete;
 
 	_hideElements = options.hideElements;
+
+	_mismatchTolerance = options.mismatchTolerance || _mismatchTolerance;
 
 	if(options.addLabelToFailedImage !== undefined){
 		_addLabelToFailedImage = options.addLabelToFailedImage;
@@ -61,7 +70,7 @@ function turnOffAnimations(){
 			document.body.appendChild(css);
 
 			if(jQuery){
-				$.fx.off = true;
+				jQuery.fx.off = true;
 			}
 		},false);
 	});
@@ -81,7 +90,7 @@ function _fileNameGetter(root, fileName){
 }
 
 function screenshot(selector, timeToWait, hideSelector, fileName){
-	
+
 	if(isNaN(Number(timeToWait)) && typeof timeToWait === 'string'){
 		fileName = timeToWait;
 		timeToWait = void 0;
@@ -89,6 +98,8 @@ function screenshot(selector, timeToWait, hideSelector, fileName){
 
 	casper.captureBase64('png'); // force pre-render
 	casper.wait(timeToWait || 250, function(){
+
+		var name = _fileNameGetter(_root, fileName);
 
 		if(hideSelector || _hideElements){
 			casper.evaluate(function(s1, s2){
@@ -103,7 +114,12 @@ function screenshot(selector, timeToWait, hideSelector, fileName){
 		}
 
 		try{
-			casper.captureSelector( _fileNameGetter(_root, fileName) , selector);
+
+			casper.captureSelector( name , selector );
+
+			if(/\.diff\.png/.test(name)){
+				diffsCreated.push(name);
+			}
 		}
 		catch(ex){
 			console.log("Screenshot FAILED: " + ex.message);
@@ -190,25 +206,46 @@ function getDiffs (path){
 	_realPath = _realPath.replace(fs.separator + path, '');
 }
 
+function getCreatedDiffFiles(){
+	var d = diffsCreated;
+	diffsCreated = [];
+	return d;
+}
+
 function compareMatched(match, exclude){
+	// Search for diff images, but only compare matched filenames
 	_test_match = typeof match === 'string' ? new RegExp(match) : match;
 	compareAll(exclude);
 }
 
-function compareAll(exclude){
+function compareExplicit(list){
+	// An explicit list of diff images to compare ['/dialog.diff.png', '/header.diff.png']
+	compareAll(void 0, list);
+}
+
+function compareSession(list){
+	// compare the diffs created in this session
+	compareAll(void 0, getCreatedDiffFiles() );
+}
+
+function compareAll(exclude, list){
 	var tests = [];
 	var fails = 0;
 	var errors = 0;
 
 	_test_exclude = typeof exclude === 'string' ? new RegExp(exclude) : exclude;
-	_realPath = undefined;
 
-	_diffsToProcess = [];
-
-	getDiffs(_root);
+	if (list){
+		_diffsToProcess = list;
+	} else {
+		_realPath = undefined;
+		getDiffs(_root);
+	}
 
 	_diffsToProcess.forEach(function(file){
+
 		var baseFile = file.replace('.diff', '');
+		var html = _libraryRoot+fs.separator+"ResembleJs"+fs.separator+"resemblejscontainer.html";
 		var test = {
 			filename: baseFile
 		};
@@ -218,22 +255,22 @@ function compareAll(exclude){
 			errors++;
 			tests.push(test);
 		} else {
-			casper.
-			thenOpen ( _libraryRoot+fs.separator+"resemblejscontainer.html" , function (){
+
+			if( !fs.isFile(html) ){
+				console.log('Can\'t find Resemble container. Perhaps the library root is mis configured. ('+html+')');
+				return;
+			}
+
+			casper.thenOpen ( html , function (){
 
 				asyncCompare(baseFile, file, function(isSame, mismatch){
+
+					tests.push(test);
 
 					if(!isSame){
 
 						test.fail = true;
 						fails++;
-
-						if(mismatch){
-							test.mismatch = mismatch;
-							_onFail(test);
-						} else {
-							_onTimeout(test);
-						}
 
 						casper.waitFor(
 							function check() {
@@ -266,6 +303,14 @@ function compareAll(exclude){
 									window._imagediff_.hasImage = false;
 								});
 
+								if(mismatch){
+									test.mismatch = mismatch;
+									_onFail(test); // casper.test.fail throws and error, this function call is aborted
+									return;  // Just to make it clear what is happening
+								} else {
+									_onTimeout(test);
+								}
+
 							}, function(){},
 							15000
 						);
@@ -273,7 +318,6 @@ function compareAll(exclude){
 						_onPass(test);
 					}
 
-					tests.push(test);
 				});
 			});
 		}
@@ -284,16 +328,21 @@ function compareAll(exclude){
 			return _diffsToProcess.length === tests.length;
 		}, function(){
 			_onComplete(tests, fails, errors);
-		}, function(){},
-		15000);
+
+		}, function(){
+
+		},
+		10000);
 	});
 }
 
 function initClient(){
 
-	casper.page.injectJs(_libraryRoot+fs.separator+'resemble.js');
+	casper.page.injectJs(_libraryRoot+fs.separator+'ResembleJs'+fs.separator+'resemble.js');
 
-	casper.evaluate(function(_threshold){
+
+	casper.evaluate(function(mismatchTolerance){
+
 		var result;
 		var div = document.createElement('div');
 
@@ -318,8 +367,13 @@ function initClient(){
 		function run(label){
 
 			function render(data){
-				document.getElementById('image-diff').innerHTML = '<img src="'+data.getImageDataUrl(label)+'"/>';
-				window._imagediff_.hasImage = true;
+				var img = new Image();
+
+				img.onload = function(){
+					window._imagediff_.hasImage = true;
+				};
+				document.getElementById('image-diff').appendChild(img);
+				img.src = data.getImageDataUrl(label);
 			}
 
 			resemble(document.getElementById('image-diff-one').files[0]).
@@ -330,6 +384,8 @@ function initClient(){
 					if(Number(data.misMatchPercentage) > _threshold){
 						console.log(Number(data.misMatchPercentage));
 
+
+					if(Number(data.misMatchPercentage) > mismatchTolerance){
 						result = data.misMatchPercentage;
 					} else {
 						result = false;
@@ -338,23 +394,30 @@ function initClient(){
 
 					window._imagediff_.hasResult = true;
 
-					if(Number(data.misMatchPercentage) > _threshold){
+
+					if(Number(data.misMatchPercentage) > mismatchTolerance){
 						render(data);
 					}
-					
+
 				});
 		}
-	},_threshold);
+
+	}, {
+		mismatchTolerance: _mismatchTolerance
+	});
 }
 
 function _onPass(test){
-	// console.log('.'); just for progress indication
+	console.log('\n');
+	casper.test.pass('No changes found for screenshot ' + test.filename);
 }
 function _onFail(test){
-	console.log('FAILED: ('+test.mismatch+'% mismatch)', test.filename, '\n');
+	console.log('\n');
+	casper.test.fail('Visual change found for screenshot ' + test.filename + ' (' + test.mismatch + '% mismatch)');
 }
 function _onTimeout(test){
-	console.log('TIMEOUT: ', test.filename, '\n');
+	console.log('\n');
+	casper.test.info('Could not complete image comparison for ' + test.filename);
 }
 function _onComplete(tests, noOfFails, noOfErrors){
 
@@ -365,15 +428,13 @@ function _onComplete(tests, noOfFails, noOfErrors){
 		console.log("The next time you run these tests, new screenshots will be taken.  These screenshots will be compared to the original.");
 		console.log('If they are different, PhantomCSS will report a failure.');
 	} else {
-		
-		console.log("\nPhantomCSS found: " + tests.length + " tests.");
-		
+
 		if(noOfFails === 0){
-			console.log("None of them failed. Which is good right?");
-			console.log("If you want to make them fail, go change some CSS - weirdo.");
+			console.log("\nPhantomCSS found " + tests.length + " tests, None of them failed. Which is good right?");
+			console.log("\nIf you want to make them fail, go change some CSS - weirdo.");
 		} else {
-			console.log(noOfFails + ' of them failed.');
-			console.log('PhantomCSS has created some images that try to show the difference (in the directory '+_diffRoot+'). Fuchsia colored pixels indicate a difference betwen the new and old screenshots.');
+			console.log("\nPhantomCSS found " + tests.length + " tests, " + noOfFails + ' of them failed.');
+			console.log('\nPhantomCSS has created some images that try to show the difference (in the directory '+_diffRoot+'). Fuchsia colored pixels indicate a difference betwen the new and old screenshots.');
 		}
 
 		if(noOfErrors !== 0){

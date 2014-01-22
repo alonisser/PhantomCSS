@@ -1,11 +1,12 @@
 /*
 Author: James Cryer
 Company: Huddle
-Last updated date: 21 Feb 2013
+Last updated date: 17 Sep 2013
 URL: https://github.com/Huddle/Resemble.js
 */
 
 (function(_this){
+	'use strict';
 
 	_this['resemble'] = function( fileData ){
 
@@ -76,15 +77,11 @@ URL: https://github.com/Huddle/Resemble.js
 		}
 
 		function loadImageData( fileData, callback ){
+			var fileReader;
 			var hiddenImage = new Image();
-			var fileReader = new FileReader();
-			
-			fileReader.onload = function (event) {
-				hiddenImage.src = event.target.result;
-			};
 
 			hiddenImage.onload = function() {
-				
+
 				var hiddenCanvas =  document.createElement('canvas');
 				var imageData;
 				var width = hiddenImage.width;
@@ -94,13 +91,21 @@ URL: https://github.com/Huddle/Resemble.js
 				hiddenCanvas.height = height;
 				hiddenCanvas.getContext('2d').drawImage(hiddenImage, 0, 0, width, height);
 				imageData = hiddenCanvas.getContext('2d').getImageData(0, 0, width, height);
-				
+
 				images.push(imageData);
 
 				callback(imageData, width, height);
 			};
-				
-			fileReader.readAsDataURL(fileData);
+
+			if (typeof fileData === 'string') {
+				hiddenImage.src = fileData;
+			} else {
+				fileReader = new FileReader();
+				fileReader.onload = function (event) {
+					hiddenImage.src = event.target.result;
+				};
+				fileReader.readAsDataURL(fileData);
+			}
 		}
 
 		function isColorSimilar(a, b, color){
@@ -338,7 +343,7 @@ URL: https://github.com/Huddle/Resemble.js
 					}
 					return;
 				}
-				
+
 				if( isRGBSimilar(pixel1, pixel2) ){
 					copyPixel(targetPix, offset, pixel2);
 
@@ -436,6 +441,8 @@ URL: https://github.com/Huddle/Resemble.js
 						data.isSameDimensions = false;
 					}
 
+					data.dimensionDifference = { width: images[0].width - images[1].width, height: images[0].height - images[1].height };
+
 					analyseImages( normalise(images[0],width, height), normalise(images[1],width, height), width, height);
 
 					triggerDataUpdate();
@@ -449,7 +456,8 @@ URL: https://github.com/Huddle/Resemble.js
 
 		function getCompareApi(param){
 
-			var hasMethod = typeof param === 'function';
+			var secondFileData,
+				hasMethod = typeof param === 'function';
 
 			if( !hasMethod ){
 				// assume it's file data
@@ -458,7 +466,7 @@ URL: https://github.com/Huddle/Resemble.js
 
 			var self = {
 				ignoreNothing: function(){
-					
+
 					tolerance.red = 16;
 					tolerance.green = 16;
 					tolerance.blue = 16;
@@ -486,7 +494,7 @@ URL: https://github.com/Huddle/Resemble.js
 					return self;
 				},
 				ignoreColors: function(){
-					
+
 					tolerance.minBrightness = 16;
 					tolerance.maxBrightness = 240;
 
